@@ -1,0 +1,20 @@
+{
+  "name": "quiz-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for What Where When quiz game",
+  "main": "index.html",
+  "scripts": {
+    "dev": "live-server --port=3000 --open=/index.html",
+    "build": "npm run build:css && npm run build:js",
+    "build:css": "node scripts/build-css.js",
+    "build:js": "node scripts/build-js.js",
+    "serve": "live-server --port=3000 --entry-file=index.html"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2",
+    "socket.io-client": "^4.7.4"
+  },
+  "keywords": ["quiz", "game", "what-where-when", "frontend"],
+  "author": "",
+  "license": "MIT"
+}
