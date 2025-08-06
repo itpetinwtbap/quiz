@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Что Где Когда</title>
+<style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            padding: 10px;
+            overflow-x: hidden;
+        }
+
+        .game-container {
+            display: grid;
+            grid-template-columns: 1fr 3fr 1fr;
+            grid-template-rows: 2fr 1fr;
+            gap: 15px;
+            height: calc(100vh - 20px);
+            width: 100%;
+            margin: 0;
+        }
+
+        .block {
+            background: rgba(20, 25, 45, 0.85);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4), 0 5px 15px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(100, 150, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: #e0e6ed;
+            transition: all 0.4s ease;
+        }
+
+        
+
+        .block-a {
+            grid-column: 2;
+            grid-row: 1;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .block-b {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        .block-c {
+            grid-column: 3;
+            grid-row: 1;
+        }
+
+        .block-d {
+            grid-column: 3;
+            grid-row: 2;
+        }
+
+        .block-e {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .block-f {
+            grid-column: 1;
+            grid-row: 2;
+        }
+
+        /* Блок A - Карточка с вопросом */
+        .question-card {
+            width: 100%;
+            height: 100%;
+            perspective: 1000px;
+            cursor: pointer;
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+
+        .card-inner.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 20px;
+            font-weight: 500;
+            text-align: center;
+            line-height: 1.4;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-back {
+            transform: rotateY(180deg);
+            background: #59574f;
+            font-size: 18px;
+            color: white;
+        }
+
+        /* Блок B - Нумерация */
+        .numbers-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            height: 100%;
+        }
+
+        .number-btn {
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+            color: #e2e8f0;
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .number-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(100, 150, 255, 0.4), transparent);
+            transition: left 0.6s;
+        }
+
+        .number-btn:hover {
+            transform: scale(1.05) translateY(-2px);
+            box-shadow: 0 10px 25px rgba(100, 150, 255, 0.3);
+            border-color: rgba(100, 150, 255, 0.6);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .number-btn:hover::before {
+            left: 100%;
+        }
+
+        .number-btn:active {
+            transform: scale(0.98);
+        }
+
+        .number-btn.used {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            color: #4a5568;
+            cursor: not-allowed;
+            border-color: rgba(100, 150, 255, 0.1);
+        }
+
+        /* Блок C - Счет */
+        .score-block h3 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #e2e8f0;
+            font-size: 18px;
+        }
+
+        .score-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .team-container {
+            width: 100%;
+            text-align: center;
+        }
+
+        .team-name {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid rgba(100, 150, 255, 0.3);
+            border-radius: 8px;
+            font-size: 16px;
+            background: rgba(45, 55, 72, 0.6);
+            color: #e2e8f0;
+            text-align: center;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .team-name:focus {
+            border-color: rgba(100, 150, 255, 0.6);
+            box-shadow: 0 0 15px rgba(100, 150, 255, 0.2);
+            outline: none;
+        }
+
+        .team-score {
+            width: 80px;
+            height: 80px;
+            padding: 0;
+            border: 3px solid rgba(100, 150, 255, 0.4);
+            border-radius: 50%;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+            color: #e2e8f0;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .team-score:focus {
+            border-color: rgba(100, 150, 255, 0.8);
+            box-shadow: 0 0 20px rgba(100, 150, 255, 0.3);
+            outline: none;
+            transform: scale(1.1);
+        }
+
+        .vs {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            text-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Блок D - Таймер */
+        .timer-block h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #e2e8f0;
+        }
+
+        .timer-display {
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            color: #667eea;
+            text-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+            font-family: 'Courier New', monospace;
+        }
+
+        .timer-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .time-selector {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .time-btn {
+            flex: 1;
+            padding: 8px;
+            background: rgba(45, 55, 72, 0.6);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .time-btn:hover {
+            background: rgba(100, 150, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .time-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .control-btn {
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .control-btn:active::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .start-btn {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+        }
+
+        .start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(72, 187, 120, 0.4);
+        }
+
+        .pause-btn {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
+        }
+
+        .pause-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(237, 137, 54, 0.4);
+        }
+
+        .reset-btn {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(245, 101, 101, 0.3);
+        }
+
+        .reset-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(245, 101, 101, 0.4);
+        }
+
+        /* Блок E - Быстрый выбор */
+        .quick-select-block {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px;
+        }
+
+        .quick-select-block h3 {
+            color: #e2e8f0;
+            margin-bottom: 10px;
+        }
+
+        .magic-btn {
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .magic-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .magic-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .magic-btn:hover::before {
+            left: 100%;
+        }
+
+        .magic-btn:active {
+            transform: scale(0.95);
+        }
+
+        .magic-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .shuffle-btn {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+        }
+
+        .shuffle-btn:hover {
+            box-shadow: 0 8px 25px rgba(72, 187, 120, 0.4);
+        }
+
+        .restart-btn {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
+        }
+
+        .restart-btn:hover {
+            box-shadow: 0 8px 25px rgba(237, 137, 54, 0.4);
+        }
+
+        /* Блок F - Лог */
+        .log-block h3 {
+            margin-bottom: 15px;
+            color: #e2e8f0;
+        }
+
+        .log-list {
+            flex: 1;
+            overflow-y: auto;
+            background: rgba(15, 15, 35, 0.6);
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid rgba(100, 150, 255, 0.2);
+        }
+
+        .log-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: rgba(45, 55, 72, 0.6);
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+            font-size: 14px;
+            color: #e2e8f0;
+            transition: all 0.3s ease;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .log-item:hover {
+            background: rgba(45, 55, 72, 0.8);
+            transform: translateX(5px);
+        }
+
+        .log-item.correct {
+            border-left-color: #48bb78;
+        }
+
+        .log-item.incorrect {
+            border-left-color: #f56565;
+        }
+    
+        .image-frame {
+            width: 100%;
+            height: 200px;
+            border: 2px dashed rgba(100, 150, 255, 0.4);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            background-color: rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .image-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .image-placeholder {
+            color: #aaa;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<!-- Socket.io client -->
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+<div class="game-container">
+<!-- Блок A - Карточка с вопросом -->
+<div class="block block-a">
+<div class="question-card">
+<div class="card-inner" id="cardInner">
+<div class="card-front" id="cardFront">
+<p>Выберите вопрос</p>
+</div>
+<div class="card-back" id="cardBack">
+<p>Ответ появится здесь</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Блок B - Нумерация вопросов -->
+<div class="block block-b">
+<div class="numbers-grid" id="numbersGrid">
+<!-- Кнопки генерируются JS -->
+</div>
+</div>
+<!-- Блок C - Счет -->
+<div class="block block-c">
+<h3>Счет игры</h3>
+<div class="score-container">
+<div class="team-container">
+<input class="team-name" id="team1Name" placeholder="Название команды" type="text" value="Знатоки"/>
+<input class="team-score" id="team1Score" min="0" type="number" value="0"/>
+</div>
+<div class="vs">VS</div>
+<div class="team-container">
+<input class="team-name" id="team2Name" placeholder="Название команды" type="text" value="Магистры"/>
+<input class="team-score" id="team2Score" min="0" type="number" value="0"/>
+</div>
+</div>
+</div>
+<!-- Блок D - Таймер -->
+<div class="block block-d">
+<h3>Таймер</h3>
+<div class="timer-display" id="timerDisplay">01:00</div>
+<div class="timer-controls">
+<div class="time-selector">
+<button class="time-btn active" data-time="60">1 мин</button>
+<button class="time-btn" data-time="120">2 мин</button>
+<button class="time-btn" data-time="180">3 мин</button>
+</div>
+<div class="control-buttons">
+<button class="control-btn start-btn">▶</button>
+<button class="control-btn pause-btn">⏸</button>
+<button class="control-btn reset-btn">⏹</button>
+</div>
+</div>
+</div>
+<!-- Блок E - Быстрый выбор -->
+<div class="block block-e">
+<div class="quick-select-block">
+<h3>Быстрый выбор</h3>
+<button class="magic-btn" id="randomQuestionBtn">🎲 Случайный вопрос</button>
+<button class="magic-btn shuffle-btn" id="shuffleQuestionsBtn">🔀 Перемешать все</button>
+<button class="magic-btn restart-btn" id="restartGameBtn">🔄 Перезапустить игру</button>
+
+<div class="image-frame" id="imageFrame">
+<input accept="image/*" hidden="" id="imageUpload" type="file"/>
+<label class="image-placeholder" for="imageUpload">Перетащите или выберите изображение</label>
+<img id="previewImage" style="display:none;"/>
+</div>
+</div>
+</div>
+<!-- Блок F - Лог -->
+<div class="block block-f">
+<div class="log-block">
+<h3>Журнал игры</h3>
+<div class="log-list" id="logList">
+</div>
+</div>
+</div>
+</div>
+<!-- Load main application -->
+<script type="module" src="src/js/main.js"></script>
+</body>
+</html>
