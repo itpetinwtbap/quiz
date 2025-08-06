@@ -2,7 +2,7 @@
  * API Client for communication with backend
  */
 class ApiClient {
-    constructor(baseUrl = '/api') {
+    constructor(baseUrl = 'http://localhost:5000/api') {
         this.baseUrl = baseUrl;
     }
 
@@ -18,6 +18,16 @@ class ApiClient {
 
         try {
             const response = await fetch(fullUrl, config);
+            
+            // Handle non-JSON responses (like sendBeacon)
+            if (!response.headers.get('content-type')?.includes('application/json')) {
+                if (response.ok) {
+                    return { success: true };
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            }
+            
             const data = await response.json();
             
             if (!response.ok) {
@@ -169,6 +179,13 @@ class ApiClient {
         return this.request(`/games/${gameId}/log`, {
             method: 'POST',
             body: JSON.stringify({ message, details })
+        });
+    }
+
+    async saveGameState(gameId, stateData) {
+        return this.request(`/games/${gameId}/save-state`, {
+            method: 'POST',
+            body: JSON.stringify(stateData)
         });
     }
 

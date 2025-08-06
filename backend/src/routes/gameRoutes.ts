@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { GameController } from '../controllers/GameController';
+import { beaconMiddleware } from '../middleware/beaconMiddleware';
 
 const router = Router();
 const gameController = new GameController();
@@ -36,6 +37,9 @@ router.post('/:id/score', gameController.updateScore);
 
 // POST /api/games/:id/log - Add game log entry
 router.post('/:id/log', gameController.addGameLog);
+
+// POST /api/games/:id/save-state - Save game state
+router.post('/:id/save-state', beaconMiddleware, gameController.saveGameState);
 
 // POST /api/games/:id/reset - Reset game
 router.post('/:id/reset', gameController.resetGame);

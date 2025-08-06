@@ -93,6 +93,7 @@ class GameUI {
         // Quick select buttons
         const randomBtn = document.getElementById('randomQuestionBtn');
         const shuffleBtn = document.getElementById('shuffleQuestionsBtn');
+        const restartBtn = document.getElementById('restartGameBtn');
 
         if (randomBtn) {
             randomBtn.addEventListener('click', (e) => {
@@ -105,6 +106,13 @@ class GameUI {
             shuffleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.gameManager.shuffleQuestions();
+            });
+        }
+
+        if (restartBtn) {
+            restartBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.gameManager.restartGame();
             });
         }
 
@@ -187,6 +195,14 @@ class GameUI {
             this.addLogEntry(logEntry);
         });
 
+        // Game restart
+        this.gameManager.on('game-restarted', () => {
+            this.resetNumberButtons();
+            this.updateCardFlip(false);
+            this.updateQuestionDisplay(null);
+            this.updateTimerDisplay();
+        });
+
         // Questions shuffled
         this.gameManager.on('questions-shuffled', () => {
             this.resetNumberButtons();
@@ -204,6 +220,8 @@ class GameUI {
     }
 
     updateUI(gameState) {
+        console.log('GameUI.updateUI called with gameState:', gameState);
+        
         // Update team names and scores
         if (this.elements.team1Name) {
             this.elements.team1Name.value = gameState.team1Name || 'Знатоки';
@@ -222,9 +240,15 @@ class GameUI {
         this.updateTimerDisplay();
 
         // Update used questions
-        if (gameState.usedQuestions) {
-            gameState.usedQuestions.forEach(questionNum => {
-                this.markQuestionAsUsed(parseInt(questionNum));
+        if (gameState.usedQuestions && gameState.questions) {
+            console.log('GameUI.updateUI: Processing usedQuestions:', gameState.usedQuestions);
+            gameState.usedQuestions.forEach(questionId => {
+                const questionIndex = gameState.questions.findIndex(q => q.id === questionId);
+                if (questionIndex !== -1) {
+                    const questionNumber = questionIndex + 1; // Convert to 1-based index
+                    console.log('Marking question as used in UI:', questionNumber, 'for question ID:', questionId);
+                    this.markQuestionAsUsed(questionNumber);
+                }
             });
         }
 
@@ -233,8 +257,11 @@ class GameUI {
             this.updateQuestionDisplay(gameState.currentQuestion);
         }
 
-        // Update card flip state
-        this.updateCardFlip(gameState.isCardFlipped);
+        // Update card flip state only if it's explicitly set
+        if (gameState.isCardFlipped !== undefined) {
+            console.log('Updating card flip state to:', gameState.isCardFlipped);
+            this.updateCardFlip(gameState.isCardFlipped);
+        }
     }
 
     generateNumberButtons(count = 12) {
@@ -256,17 +283,29 @@ class GameUI {
     }
 
     updateQuestionDisplay(question) {
-        if (this.elements.cardFront && question) {
-            this.elements.cardFront.innerHTML = `<p>${question.question}</p>`;
+        if (this.elements.cardFront) {
+            if (question) {
+                this.elements.cardFront.innerHTML = `<p>${question.question}</p>`;
+            } else {
+                this.elements.cardFront.innerHTML = `<p>Выберите вопрос</p>`;
+            }
         }
-        if (this.elements.cardBack && question) {
-            this.elements.cardBack.innerHTML = `<p>${question.answer}</p>`;
+        if (this.elements.cardBack) {
+            if (question) {
+                this.elements.cardBack.innerHTML = `<p>${question.answer}</p>`;
+            } else {
+                this.elements.cardBack.innerHTML = `<p>Ответ появится здесь</p>`;
+            }
         }
     }
 
     updateCardFlip(isFlipped) {
+        console.log('GameUI.updateCardFlip called with:', isFlipped);
         if (this.elements.cardInner) {
             this.elements.cardInner.classList.toggle('flipped', isFlipped);
+            console.log('Card inner element found, flipped state set to:', isFlipped);
+        } else {
+            console.warn('Card inner element not found');
         }
     }
 
@@ -274,6 +313,9 @@ class GameUI {
         const btn = this.elements.numbersGrid?.querySelector(`.number-btn:nth-child(${questionNumber})`);
         if (btn) {
             btn.classList.add('used');
+            console.log('GameUI.markQuestionAsUsed: Marked button', questionNumber, 'as used');
+        } else {
+            console.warn('GameUI.markQuestionAsUsed: Button not found for question', questionNumber);
         }
     }
 

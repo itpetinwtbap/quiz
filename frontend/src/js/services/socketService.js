@@ -9,7 +9,7 @@ class SocketService {
         this.isConnected = false;
     }
 
-    connect(serverUrl = window.location.origin) {
+    connect(serverUrl = 'http://localhost:5000') {
         if (this.socket) {
             this.disconnect();
         }

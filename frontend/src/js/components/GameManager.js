@@ -26,6 +26,7 @@ class GameManager {
 
         this.eventHandlers = new Map();
         this.isMultiplayer = false;
+        this.saveStateTimeout = null;
 
         this.setupSocketEventHandlers();
     }
@@ -105,11 +106,59 @@ class GameManager {
 
     // Game initialization
     async initializeGame(gameId = null, packageId = null) {
+        console.log('GameManager.initializeGame called with:', { gameId, packageId });
+        
         try {
             if (gameId) {
                 // Load existing game
                 const response = await this.api.getGameState(gameId);
-                this.updateGameState(response.data);
+                const restoredState = response.data;
+                
+                // Restore complete game state
+                this.updateGameState({
+                    ...restoredState,
+                    // Ensure we have all required fields
+                    currentQuestion: restoredState.currentQuestion || null,
+                    isCardFlipped: restoredState.isCardFlipped || false,
+                    selectedTime: restoredState.selectedTime || restoredState.defaultTimeLimit,
+                    currentTime: restoredState.currentTimeLeft || restoredState.defaultTimeLimit,
+                    usedQuestions: restoredState.usedQuestions || []
+                });
+                
+                console.log('Game state restored:', this.gameState);
+                
+                // Load additional UI state from localStorage
+                const localUIState = this.loadUIStateFromLocal();
+                if (localUIState) {
+                    // Merge localStorage state with backend state
+                    this.updateGameState({
+                        isCardFlipped: localUIState.isCardFlipped !== undefined ? localUIState.isCardFlipped : (this.gameState.isCardFlipped || false),
+                        usedQuestions: localUIState.usedQuestions || this.gameState.usedQuestions || [],
+                        team1Score: localUIState.team1Score !== undefined ? localUIState.team1Score : this.gameState.team1Score,
+                        team2Score: localUIState.team2Score !== undefined ? localUIState.team2Score : this.gameState.team2Score,
+                        selectedTime: localUIState.selectedTime || this.gameState.selectedTime,
+                        gameLog: localUIState.gameLog || this.gameState.gameLog || []
+                    });
+                    
+                    // Restore current question if it exists
+                    if (localUIState.currentQuestionId && this.gameState.questions) {
+                        const question = this.gameState.questions.find(q => q.id === localUIState.currentQuestionId);
+                        if (question) {
+                            this.updateGameState({
+                                currentQuestion: question,
+                                currentQuestionId: question.id
+                            });
+                        }
+                    }
+                    
+                    console.log('UI state merged from localStorage');
+                }
+                
+                // Force UI update after state restoration
+                this.emit('game-state-changed', this.gameState);
+                
+                // Update URL with game ID (in case it was missing)
+                this.updateUrlWithGameId(this.gameState.id);
                 
                 // Join multiplayer if socket connected
                 if (this.socket.isConnected) {
@@ -129,26 +178,65 @@ class GameManager {
                     package: packageResponse.data
                 });
 
+                // Update URL with game ID
+                this.updateUrlWithGameId(this.gameState.id);
+
                 if (this.socket.isConnected) {
                     this.socket.joinGame(this.gameState.id);
                 }
             } else {
-                // Initialize with default questions (offline mode)
-                this.initializeOfflineGame();
+                // Create new game on backend even for offline mode
+                try {
+                    console.log('Creating new game on backend...');
+                    const gameResponse = await this.api.createGame({
+                        name: 'Новая игра',
+                        defaultTimeLimit: 60
+                    });
+                    console.log('Game created successfully:', gameResponse);
+
+                    this.updateGameState({
+                        ...gameResponse.data,
+                        questions: this.getDefaultQuestions(),
+                        package: {
+                            name: 'Базовый пакет',
+                            description: 'Стандартные вопросы'
+                        },
+                        gameLog: [{
+                            timestamp: new Date().toISOString(),
+                            action: 'Игра началась'
+                        }]
+                    });
+
+                    // Update URL with game ID
+                    this.updateUrlWithGameId(this.gameState.id);
+
+                    if (this.socket.isConnected) {
+                        this.socket.joinGame(this.gameState.id);
+                    }
+                } catch (error) {
+                    console.warn('Failed to create game on backend, using offline mode:', error);
+                    this.initializeOfflineGame();
+                }
             }
 
             this.emit('game-initialized', this.gameState);
         } catch (error) {
             console.error('Failed to initialize game:', error);
             this.emit('game-error', error);
-            // Fallback to offline mode
-            this.initializeOfflineGame();
+            
+            // If we have a gameId but failed to load, try to create a new game
+            if (gameId && !packageId) {
+                console.log('Trying to create new game as fallback...');
+                this.initializeOfflineGame();
+            } else {
+                // Fallback to offline mode
+                this.initializeOfflineGame();
+            }
         }
     }
 
-    initializeOfflineGame() {
-        // Default questions from original game
-        const defaultQuestions = [
+    getDefaultQuestions() {
+        return [
             { id: '1', question: "Что такое черная дыра?", answer: "Область пространства-времени, гравитационное притяжение которой настолько велико, что покинуть её не могут даже объекты, движущиеся со скоростью света" },
             { id: '2', question: "Кто написал 'Войну и мир'?", answer: "Лев Николаевич Толстой" },
             { id: '3', question: "Какой химический элемент обозначается символом Au?", answer: "Золото (Aurum)" },
@@ -162,13 +250,28 @@ class GameManager {
             { id: '11', question: "Какое самое глубокое место на Земле?", answer: "Марианская впадина" },
             { id: '12', question: "Сколько сердец у осьминога?", answer: "Три сердца" }
         ];
+    }
 
+    updateUrlWithGameId(gameId) {
+        if (gameId && window.history && window.history.pushState) {
+            const url = new URL(window.location);
+            url.searchParams.set('game', gameId);
+            window.history.pushState({}, '', url);
+            console.log('URL updated with game ID:', gameId, 'New URL:', url.toString());
+        }
+    }
+
+    initializeOfflineGame() {
         this.updateGameState({
-            questions: defaultQuestions,
+            questions: this.getDefaultQuestions(),
             package: {
                 name: 'Базовый пакет',
                 description: 'Стандартные вопросы'
-            }
+            },
+            gameLog: [{
+                timestamp: new Date().toISOString(),
+                action: 'Игра началась'
+            }]
         });
 
         this.emit('game-initialized', this.gameState);
@@ -177,6 +280,90 @@ class GameManager {
     updateGameState(newState) {
         this.gameState = { ...this.gameState, ...newState };
         this.emit('game-state-changed', this.gameState);
+        
+        // Auto-save state to backend if we have a game ID
+        if (this.gameState.id && this.api) {
+            this.debouncedSaveState();
+        }
+    }
+
+    debouncedSaveState() {
+        // Clear existing timeout
+        if (this.saveStateTimeout) {
+            clearTimeout(this.saveStateTimeout);
+        }
+        
+        // Set new timeout for saving state
+        this.saveStateTimeout = setTimeout(() => {
+            this.saveStateToBackend();
+        }, 1000); // Save after 1 second of inactivity
+    }
+
+    async saveStateToBackend() {
+        try {
+            if (!this.gameState.id || !this.api) {
+                return;
+            }
+
+            const stateToSave = {
+                team1Score: this.gameState.team1Score,
+                team2Score: this.gameState.team2Score,
+                currentQuestionId: this.gameState.currentQuestion?.id,
+                usedQuestions: this.gameState.usedQuestions,
+                isTimerRunning: this.gameState.isTimerRunning,
+                currentTimeLeft: this.gameState.currentTime,
+                isCardFlipped: this.gameState.isCardFlipped,
+                selectedTime: this.gameState.selectedTime,
+                currentQuestion: this.gameState.currentQuestion
+            };
+            
+            console.log('Saving state to backend:', stateToSave);
+            await this.api.saveGameState(this.gameState.id, stateToSave);
+            console.log('Game state saved to backend');
+            
+            // Also save to localStorage for better UX
+            this.saveUIStateToLocal();
+        } catch (error) {
+            console.warn('Failed to save game state to backend:', error);
+            // Don't throw error to avoid breaking the game flow
+            // The game will continue to work in offline mode
+        }
+    }
+
+    // Save UI state to localStorage for better UX
+    saveUIStateToLocal() {
+        try {
+            const uiState = {
+                isCardFlipped: this.gameState.isCardFlipped,
+                currentQuestionId: this.gameState.currentQuestion?.id,
+                usedQuestions: this.gameState.usedQuestions,
+                team1Score: this.gameState.team1Score,
+                team2Score: this.gameState.team2Score,
+                selectedTime: this.gameState.selectedTime,
+                gameLog: this.gameState.gameLog || [],
+                lastSaved: new Date().toISOString()
+            };
+            
+            console.log('Saving UI state to localStorage:', uiState);
+            localStorage.setItem(`quiz-ui-state-${this.gameState.id}`, JSON.stringify(uiState));
+        } catch (error) {
+            console.warn('Failed to save UI state to localStorage:', error);
+        }
+    }
+
+    // Load UI state from localStorage
+    loadUIStateFromLocal() {
+        try {
+            const savedState = localStorage.getItem(`quiz-ui-state-${this.gameState.id}`);
+            if (savedState) {
+                const uiState = JSON.parse(savedState);
+                console.log('Loaded UI state from localStorage:', uiState);
+                return uiState;
+            }
+        } catch (error) {
+            console.warn('Failed to load UI state from localStorage:', error);
+        }
+        return null;
     }
 
     // Question management
@@ -193,11 +380,17 @@ class GameManager {
         if (!question) return;
 
         this.updateGameState({
-            currentQuestion: question
+            currentQuestion: question,
+            currentQuestionId: question.id
         });
 
+        // Mark question as used
+        this.markQuestionAsUsed(questionNumber);
+
+        // If card is flipped (showing answer), flip it back to show new question
         if (this.gameState.isCardFlipped) {
-            this.flipCard();
+            this.updateGameState({ isCardFlipped: false });
+            this.emit('card-flipped', { isCardFlipped: false });
         }
 
         this.addGameLog(`Выбран вопрос ${questionNumber}`);
@@ -217,24 +410,29 @@ class GameManager {
     }
 
     async handleRandomSelection() {
-        const availableNumbers = [];
-        for (let i = 1; i <= this.gameState.questions.length; i++) {
-            if (!this.gameState.usedQuestions.includes(i.toString())) {
-                availableNumbers.push(i);
-            }
-        }
+        const availableQuestions = this.gameState.questions.filter(q => 
+            !this.gameState.usedQuestions.includes(q.id)
+        );
 
-        if (availableNumbers.length === 0) {
+        if (availableQuestions.length === 0) {
             this.addGameLog('Все вопросы уже использованы!');
             return;
         }
 
-        const randomIndex = Math.floor(Math.random() * availableNumbers.length);
-        const selectedNumber = availableNumbers[randomIndex];
+        const randomIndex = Math.floor(Math.random() * availableQuestions.length);
+        const selectedQuestion = availableQuestions[randomIndex];
+        const questionNumber = this.gameState.questions.findIndex(q => q.id === selectedQuestion.id) + 1;
         
-        await this.selectQuestion(selectedNumber);
-        this.markQuestionAsUsed(selectedNumber);
-        this.addGameLog(`Случайно выбран вопрос ${selectedNumber}`);
+        await this.selectQuestion(questionNumber);
+        this.markQuestionAsUsed(questionNumber);
+        
+        // If card is flipped (showing answer), flip it back to show new question
+        if (this.gameState.isCardFlipped) {
+            this.updateGameState({ isCardFlipped: false });
+            this.emit('card-flipped', { isCardFlipped: false });
+        }
+        
+        this.addGameLog(`Случайно выбран вопрос ${questionNumber}`);
     }
 
     handleRandomQuestionSelected(data) {
@@ -244,16 +442,18 @@ class GameManager {
 
     markQuestionAsUsed(questionNumber) {
         const usedQuestions = [...this.gameState.usedQuestions];
-        if (!usedQuestions.includes(questionNumber.toString())) {
-            usedQuestions.push(questionNumber.toString());
+        const questionId = this.gameState.questions[questionNumber - 1]?.id;
+        
+        if (questionId && !usedQuestions.includes(questionId)) {
+            usedQuestions.push(questionId);
+            console.log('Marking question as used:', questionNumber, 'ID:', questionId, 'Used questions:', usedQuestions);
             this.updateGameState({ usedQuestions });
         }
     }
 
     // Card management
     flipCard() {
-        if (!this.gameState.currentQuestion) return;
-
+        // Allow flipping even without current question (for state restoration)
         if (this.isMultiplayer && this.socket.isConnected) {
             this.socket.flipCard();
         } else {
@@ -261,8 +461,49 @@ class GameManager {
         }
     }
 
+    // Game restart
+    restartGame() {
+        console.log('Restarting game...');
+        
+        // Reset all game state
+        this.updateGameState({
+            team1Score: 0,
+            team2Score: 0,
+            currentQuestion: null,
+            currentQuestionId: null,
+            usedQuestions: [],
+            isCardFlipped: false,
+            isTimerRunning: false,
+            currentTime: this.gameState.selectedTime || 60,
+            gameLog: [{
+                timestamp: new Date().toISOString(),
+                action: 'Игра перезапущена'
+            }]
+        });
+
+        // Clear localStorage for this game
+        if (this.gameState.id) {
+            try {
+                localStorage.removeItem(`quiz-ui-state-${this.gameState.id}`);
+                console.log('Cleared localStorage for game:', this.gameState.id);
+            } catch (error) {
+                console.warn('Failed to clear localStorage:', error);
+            }
+        }
+
+        // Save reset state to backend
+        this.forceSaveState();
+
+        // Reset UI
+        this.emit('game-restarted');
+        
+        console.log('Game restarted successfully');
+    }
+
     handleCardFlip(data = null) {
-        const isCardFlipped = !this.gameState.isCardFlipped;
+        const currentState = this.gameState.isCardFlipped || false;
+        const isCardFlipped = data && data.isCardFlipped !== undefined ? data.isCardFlipped : !currentState;
+        console.log('Flipping card from', currentState, 'to', isCardFlipped);
         this.updateGameState({ isCardFlipped });
         this.emit('card-flipped', { isCardFlipped });
     }
@@ -273,7 +514,8 @@ class GameManager {
 
         this.updateGameState({
             selectedTime: seconds,
-            currentTime: seconds
+            currentTime: seconds,
+            currentTimeLeft: seconds
         });
 
         this.emit('timer-time-set', { time: seconds });
@@ -306,7 +548,10 @@ class GameManager {
     }
 
     handleTimerStart() {
-        this.updateGameState({ isTimerRunning: true });
+        this.updateGameState({ 
+            isTimerRunning: true,
+            currentTime: this.gameState.currentTime || this.gameState.selectedTime
+        });
         this.addGameLog('Таймер запущен');
         this.emit('timer-started');
     }
@@ -351,9 +596,14 @@ class GameManager {
 
     handleScoreUpdate(data) {
         const { team, score } = data;
-        this.updateGameState({ [team + 'Score']: score });
-        this.addGameLog(`${team} счет изменен на ${score}`);
+        const scoreField = team === 'team1' ? 'team1Score' : 'team2Score';
+        
+        // Update only the score without affecting other state
+        this.gameState[scoreField] = score;
         this.emit('score-updated', data);
+        
+        // Add log entry
+        this.addGameLog(`${team} счет изменен на ${score}`);
     }
 
     // Game log
@@ -388,7 +638,8 @@ class GameManager {
     shuffleQuestions() {
         this.updateGameState({
             usedQuestions: [],
-            currentQuestion: null
+            currentQuestion: null,
+            currentQuestionId: null
         });
         this.addGameLog('Все вопросы перемешаны и доступны снова');
         this.emit('questions-shuffled');
@@ -396,6 +647,13 @@ class GameManager {
 
     getGameState() {
         return { ...this.gameState };
+    }
+
+    async forceSaveState() {
+        if (this.saveStateTimeout) {
+            clearTimeout(this.saveStateTimeout);
+        }
+        await this.saveStateToBackend();
     }
 }
 

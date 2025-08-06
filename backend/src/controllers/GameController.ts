@@ -149,6 +149,19 @@ export class GameController {
     }
   };
 
+  public saveGameState = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const stateData = req.body;
+      
+      const game = await this.gameService.saveGameState(id, stateData);
+      res.json({ success: true, data: game });
+    } catch (error) {
+      console.error('Error saving game state:', error);
+      res.status(500).json({ success: false, error: 'Failed to save game state' });
+    }
+  };
+
   public resetGame = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;

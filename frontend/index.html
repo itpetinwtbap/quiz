@@ -452,6 +452,15 @@
             box-shadow: 0 8px 25px rgba(72, 187, 120, 0.4);
         }
 
+        .restart-btn {
+            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
+        }
+
+        .restart-btn:hover {
+            box-shadow: 0 8px 25px rgba(237, 137, 54, 0.4);
+        }
+
         /* Блок F - Лог */
         .log-block h3 {
             margin-bottom: 15px;
@@ -591,6 +600,7 @@
 <h3>Быстрый выбор</h3>
 <button class="magic-btn" id="randomQuestionBtn">🎲 Случайный вопрос</button>
 <button class="magic-btn shuffle-btn" id="shuffleQuestionsBtn">🔀 Перемешать все</button>
+<button class="magic-btn restart-btn" id="restartGameBtn">🔄 Перезапустить игру</button>
 
 <div class="image-frame" id="imageFrame">
 <input accept="image/*" hidden="" id="imageUpload" type="file"/>
@@ -604,7 +614,6 @@
 <div class="log-block">
 <h3>Журнал игры</h3>
 <div class="log-list" id="logList">
-<div class="log-item">Игра началась</div>
 </div>
 </div>
 </div>

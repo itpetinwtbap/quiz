@@ -54,6 +54,14 @@ export class Game {
     details?: any;
   }>;
 
+  @Column({ type: 'json', nullable: true })
+  gameState?: {
+    isCardFlipped?: boolean;
+    selectedTime?: number;
+    currentQuestion?: any;
+    lastActivity?: string;
+  };
+
   @ManyToOne(() => QuestionPackage, { nullable: true })
   package?: QuestionPackage;
 

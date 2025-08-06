@@ -17,8 +17,21 @@ export class GameService {
   }
 
   public async createGame(gameData: Partial<Game>): Promise<Game> {
+    // Find default package if no package specified
+    let packageToUse = gameData.package;
+    if (!packageToUse) {
+      const defaultPackage = await this.questionService.getDefaultPackage();
+      if (defaultPackage) {
+        packageToUse = defaultPackage;
+      } else {
+        // Create default package if it doesn't exist
+        packageToUse = await this.questionService.createDefaultPackage();
+      }
+    }
+
     const game = this.gameRepository.create({
       ...gameData,
+      package: packageToUse,
       status: GameStatus.WAITING,
       team1Score: 0,
       team2Score: 0,
@@ -26,7 +39,13 @@ export class GameService {
       gameLog: [{
         timestamp: new Date().toISOString(),
         action: 'Game created'
-      }]
+      }],
+      gameState: {
+        isCardFlipped: false,
+        selectedTime: gameData.defaultTimeLimit || 60,
+        currentQuestion: null,
+        lastActivity: new Date().toISOString()
+      }
     });
     
     return this.gameRepository.save(game);
@@ -50,6 +69,12 @@ export class GameService {
       questions = await this.questionService.getQuestionsByPackage(game.package.id);
     }
 
+    // Get current question if exists
+    let currentQuestion = null;
+    if (game.currentQuestionId) {
+      currentQuestion = questions.find(q => q.id === game.currentQuestionId);
+    }
+
     return {
       id: game.id,
       name: game.name,
@@ -61,12 +86,17 @@ export class GameService {
       defaultTimeLimit: game.defaultTimeLimit,
       usedQuestions: game.usedQuestions || [],
       currentQuestionId: game.currentQuestionId,
+      currentQuestion: currentQuestion,
       isTimerRunning: game.isTimerRunning,
       currentTimeLeft: game.currentTimeLeft,
       gameLog: game.gameLog || [],
       package: game.package,
       questions: questions,
-      activeSessions: game.sessions?.filter(s => s.isActive).length || 0
+      activeSessions: game.sessions?.filter(s => s.isActive).length || 0,
+      // Restore additional state
+      isCardFlipped: game.gameState?.isCardFlipped || false,
+      selectedTime: game.gameState?.selectedTime || game.defaultTimeLimit,
+      lastActivity: game.gameState?.lastActivity || game.updatedAt.toISOString()
     };
   }
 
@@ -77,6 +107,33 @@ export class GameService {
     }
 
     Object.assign(game, updateData);
+    return this.gameRepository.save(game);
+  }
+
+  public async saveGameState(gameId: string, stateData: any): Promise<Game> {
+    const game = await this.gameRepository.findOne({ where: { id: gameId } });
+    if (!game) {
+      throw new Error('Game not found');
+    }
+
+    // Update main game fields
+    if (stateData.team1Score !== undefined) game.team1Score = stateData.team1Score;
+    if (stateData.team2Score !== undefined) game.team2Score = stateData.team2Score;
+    if (stateData.currentQuestionId !== undefined) game.currentQuestionId = stateData.currentQuestionId;
+    if (stateData.usedQuestions !== undefined) game.usedQuestions = stateData.usedQuestions;
+    if (stateData.isTimerRunning !== undefined) game.isTimerRunning = stateData.isTimerRunning;
+    if (stateData.currentTimeLeft !== undefined) game.currentTimeLeft = stateData.currentTimeLeft;
+
+    // Update game state object
+    const currentGameState = game.gameState || {};
+    game.gameState = {
+      ...currentGameState,
+      isCardFlipped: stateData.isCardFlipped !== undefined ? stateData.isCardFlipped : currentGameState.isCardFlipped,
+      selectedTime: stateData.selectedTime !== undefined ? stateData.selectedTime : currentGameState.selectedTime,
+      currentQuestion: stateData.currentQuestion !== undefined ? stateData.currentQuestion : currentGameState.currentQuestion,
+      lastActivity: new Date().toISOString()
+    };
+
     return this.gameRepository.save(game);
   }
 
@@ -100,6 +157,14 @@ export class GameService {
       usedQuestions.push(question.id);
       game.usedQuestions = usedQuestions;
     }
+
+    // Update game state object
+    const currentGameState = game.gameState || {};
+    game.gameState = {
+      ...currentGameState,
+      currentQuestion: question,
+      lastActivity: new Date().toISOString()
+    };
 
     await this.gameRepository.save(game);
     return question;
@@ -128,6 +193,14 @@ export class GameService {
     usedQuestions.push(selectedQuestion.id);
     game.usedQuestions = usedQuestions;
 
+    // Update game state object
+    const currentGameState = game.gameState || {};
+    game.gameState = {
+      ...currentGameState,
+      currentQuestion: selectedQuestion,
+      lastActivity: new Date().toISOString()
+    };
+
     await this.gameRepository.save(game);
     
     return { question: selectedQuestion, questionNumber };
@@ -152,6 +225,13 @@ export class GameService {
         break;
     }
 
+    // Update game state object
+    const currentGameState = game.gameState || {};
+    game.gameState = {
+      ...currentGameState,
+      lastActivity: new Date().toISOString()
+    };
+
     await this.gameRepository.save(game);
   }
 
@@ -166,6 +246,13 @@ export class GameService {
     } else {
       game.team2Score = score;
     }
+
+    // Update game state object
+    const currentGameState = game.gameState || {};
+    game.gameState = {
+      ...currentGameState,
+      lastActivity: new Date().toISOString()
+    };
 
     await this.gameRepository.save(game);
   }
@@ -184,6 +271,14 @@ export class GameService {
     });
 
     game.gameLog = gameLog;
+    
+    // Update game state object
+    const currentGameState = game.gameState || {};
+    game.gameState = {
+      ...currentGameState,
+      lastActivity: new Date().toISOString()
+    };
+    
     await this.gameRepository.save(game);
   }
 
@@ -252,6 +347,12 @@ export class GameService {
       timestamp: new Date().toISOString(),
       action: 'Game reset'
     }];
+    game.gameState = {
+      isCardFlipped: false,
+      selectedTime: game.defaultTimeLimit,
+      currentQuestion: null,
+      lastActivity: new Date().toISOString()
+    };
 
     return this.gameRepository.save(game);
   }
@@ -269,6 +370,15 @@ export class GameService {
 
     game.usedQuestions = [];
     game.currentQuestionId = undefined;
+    
+    // Update game state
+    const currentGameState = game.gameState || {};
+    game.gameState = {
+      ...currentGameState,
+      currentQuestion: null,
+      lastActivity: new Date().toISOString()
+    };
+    
     await this.gameRepository.save(game);
   }
 }
