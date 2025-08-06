@@ -2,8 +2,9 @@
  * Game UI Controller - manages DOM interactions and visual updates
  */
 class GameUI {
-    constructor(gameManager) {
+    constructor(gameManager, socketService) {
         this.gameManager = gameManager;
+        this.socketService = socketService;
         this.timerInterval = null;
         this.elements = {};
         
@@ -185,6 +186,32 @@ class GameUI {
             this.updateTimerDisplay();
         });
 
+        // Timer state restoration from backend
+        this.gameManager.on('timer-state-restored', (data) => {
+            console.log('Restoring timer state from backend:', data);
+            
+            // Update timer display with restored time
+            this.updateTimerDisplay();
+            
+            // If timer was running, restart the display
+            if (data.isRunning) {
+                this.startTimerDisplay();
+            }
+        });
+
+        // Listen for timer updates from backend
+        this.socketService.on('timer-updated', (data) => {
+            console.log('Timer updated from backend:', data);
+            this.updateTimerDisplay();
+        });
+
+        // Listen for timer time updates from backend
+        this.socketService.on('timer-time-updated', (data) => {
+            console.log('Timer time updated from backend:', data);
+            this.gameManager.updateGameState({ currentTime: data.currentTime });
+            this.updateTimerDisplay();
+        });
+
         // Score updates
         this.gameManager.on('score-updated', (data) => {
             this.updateScoreDisplay(data.team, data.score);
@@ -337,12 +364,13 @@ class GameUI {
         this.timerInterval = setInterval(() => {
             const gameState = this.gameManager.getGameState();
             if (gameState.isTimerRunning && gameState.currentTime > 0) {
-                this.gameManager.updateGameState({
-                    currentTime: gameState.currentTime - 1
-                });
+                const newTime = gameState.currentTime - 1;
+                
+                // Update timer time using the new method that syncs with backend
+                this.gameManager.updateTimerTime(newTime);
                 this.updateTimerDisplay();
                 
-                if (gameState.currentTime <= 1) {
+                if (newTime <= 1) {
                     this.gameManager.pauseTimer();
                     this.gameManager.addGameLog('Время вышло!');
                 }

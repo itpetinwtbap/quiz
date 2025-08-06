@@ -21,9 +21,6 @@ FROM nginx:alpine
 # Copy built files to nginx
 COPY --from=builder /app /usr/share/nginx/html
 
-# Copy custom nginx config if exists
-COPY nginx.conf /etc/nginx/conf.d/default.conf 2>/dev/null || echo "Using default nginx config"
-
 # Create nginx config if not exists
 RUN if [ ! -f /etc/nginx/conf.d/default.conf ]; then \
     echo 'server {' > /etc/nginx/conf.d/default.conf && \

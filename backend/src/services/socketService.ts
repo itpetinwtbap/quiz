@@ -49,6 +49,11 @@ export class SocketService {
         await this.handleTimerControl(socket, data);
       });
 
+      // Timer time update
+      socket.on('timer-time-update', async (data: { gameId: string; currentTime: number }) => {
+        await this.handleTimerTimeUpdate(socket, data);
+      });
+
       // Score updates
       socket.on('update-score', async (data: { gameId: string; team: 'team1' | 'team2'; score: number }) => {
         await this.handleScoreUpdate(socket, data);
@@ -199,6 +204,22 @@ export class SocketService {
     } catch (error) {
       console.error('Error controlling timer:', error);
       socket.emit('error', { message: 'Failed to control timer' });
+    }
+  }
+
+  private async handleTimerTimeUpdate(socket: Socket, data: { gameId: string; currentTime: number }): Promise<void> {
+    try {
+      const { gameId, currentTime } = data;
+      
+      await this.gameService.updateTimerTime(gameId, currentTime);
+      
+      this.io.to(gameId).emit('timer-time-updated', {
+        currentTime,
+        updatedBy: socket.id
+      });
+    } catch (error) {
+      console.error('Error updating timer time:', error);
+      socket.emit('error', { message: 'Failed to update timer time' });
     }
   }
 

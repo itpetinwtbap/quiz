@@ -4,7 +4,7 @@
 class GameManager {
     constructor(apiClient, socketService) {
         this.api = apiClient;
-        this.socket = socketService;
+        this.socketService = socketService;
         this.gameState = {
             id: null,
             name: '',
@@ -33,41 +33,41 @@ class GameManager {
 
     setupSocketEventHandlers() {
         // Game state synchronization
-        this.socket.on('game-state-updated', (gameState) => {
+        this.socketService.on('game-state-updated', (gameState) => {
             this.updateGameState(gameState);
         });
 
         // Question selection
-        this.socket.on('question-selected', (data) => {
+        this.socketService.on('question-selected', (data) => {
             this.handleQuestionSelected(data);
         });
 
-        this.socket.on('random-question-selected', (data) => {
+        this.socketService.on('random-question-selected', (data) => {
             this.handleRandomQuestionSelected(data);
         });
 
         // Timer events
-        this.socket.on('timer-updated', (data) => {
+        this.socketService.on('timer-updated', (data) => {
             this.handleTimerUpdate(data);
         });
 
         // Score updates
-        this.socket.on('score-updated', (data) => {
+        this.socketService.on('score-updated', (data) => {
             this.handleScoreUpdate(data);
         });
 
         // Card flip
-        this.socket.on('card-flipped', (data) => {
+        this.socketService.on('card-flipped', (data) => {
             this.handleCardFlip(data);
         });
 
         // Log updates
-        this.socket.on('log-added', (data) => {
+        this.socketService.on('log-added', (data) => {
             this.handleLogAdded(data);
         });
 
         // Connection status
-        this.socket.on('connection-status', (data) => {
+        this.socketService.on('connection-status', (data) => {
             this.isMultiplayer = data.connected;
             this.emit('multiplayer-status-changed', data);
         });
@@ -154,6 +154,22 @@ class GameManager {
                     console.log('UI state merged from localStorage');
                 }
                 
+                // Restore timer state from backend
+                if (this.gameState.isTimerRunning && this.gameState.currentTime !== undefined) {
+                    console.log('Restoring timer state from backend:', {
+                        isTimerRunning: this.gameState.isTimerRunning,
+                        currentTime: this.gameState.currentTime,
+                        selectedTime: this.gameState.selectedTime
+                    });
+                    
+                    // Emit timer state to UI for restoration
+                    this.emit('timer-state-restored', {
+                        isRunning: this.gameState.isTimerRunning,
+                        currentTime: this.gameState.currentTime,
+                        selectedTime: this.gameState.selectedTime
+                    });
+                }
+                
                 // Force UI update after state restoration
                 this.emit('game-state-changed', this.gameState);
                 
@@ -161,9 +177,9 @@ class GameManager {
                 this.updateUrlWithGameId(this.gameState.id);
                 
                 // Join multiplayer if socket connected
-                if (this.socket.isConnected) {
-                    this.socket.joinGame(gameId);
-                }
+                        if (this.socketService.isConnected) {
+            this.socketService.joinGame(gameId);
+        }
             } else if (packageId) {
                 // Create new game with package
                 const packageResponse = await this.api.getPackageWithQuestions(packageId);
@@ -181,8 +197,8 @@ class GameManager {
                 // Update URL with game ID
                 this.updateUrlWithGameId(this.gameState.id);
 
-                if (this.socket.isConnected) {
-                    this.socket.joinGame(this.gameState.id);
+                if (this.socketService.isConnected) {
+                    this.socketService.joinGame(this.gameState.id);
                 }
             } else {
                 // Create new game on backend even for offline mode
@@ -210,9 +226,9 @@ class GameManager {
                     // Update URL with game ID
                     this.updateUrlWithGameId(this.gameState.id);
 
-                    if (this.socket.isConnected) {
-                        this.socket.joinGame(this.gameState.id);
-                    }
+                                if (this.socketService.isConnected) {
+                this.socketService.joinGame(this.gameState.id);
+            }
                 } catch (error) {
                     console.warn('Failed to create game on backend, using offline mode:', error);
                     this.initializeOfflineGame();
@@ -368,8 +384,8 @@ class GameManager {
 
     // Question management
     async selectQuestion(questionNumber) {
-        if (this.isMultiplayer && this.socket.isConnected) {
-            this.socket.selectQuestion(questionNumber);
+        if (this.isMultiplayer && this.socketService.isConnected) {
+            this.socketService.selectQuestion(questionNumber);
         } else {
             await this.handleQuestionSelection(questionNumber);
         }
@@ -402,8 +418,8 @@ class GameManager {
     }
 
     async selectRandomQuestion() {
-        if (this.isMultiplayer && this.socket.isConnected) {
-            this.socket.selectRandomQuestion();
+        if (this.isMultiplayer && this.socketService.isConnected) {
+            this.socketService.selectRandomQuestion();
         } else {
             await this.handleRandomSelection();
         }
@@ -454,8 +470,8 @@ class GameManager {
     // Card management
     flipCard() {
         // Allow flipping even without current question (for state restoration)
-        if (this.isMultiplayer && this.socket.isConnected) {
-            this.socket.flipCard();
+        if (this.isMultiplayer && this.socketService.isConnected) {
+            this.socketService.flipCard();
         } else {
             this.handleCardFlip();
         }
@@ -524,24 +540,24 @@ class GameManager {
     startTimer() {
         if (this.gameState.isTimerRunning) return;
 
-        if (this.isMultiplayer && this.socket.isConnected) {
-            this.socket.controlTimer('start');
+        if (this.isMultiplayer && this.socketService.isConnected) {
+            this.socketService.controlTimer('start');
         } else {
             this.handleTimerStart();
         }
     }
 
     pauseTimer() {
-        if (this.isMultiplayer && this.socket.isConnected) {
-            this.socket.controlTimer('pause');
+        if (this.isMultiplayer && this.socketService.isConnected) {
+            this.socketService.controlTimer('pause');
         } else {
             this.handleTimerPause();
         }
     }
 
     resetTimer() {
-        if (this.isMultiplayer && this.socket.isConnected) {
-            this.socket.controlTimer('reset', this.gameState.selectedTime);
+        if (this.isMultiplayer && this.socketService.isConnected) {
+            this.socketService.controlTimer('reset', this.gameState.selectedTime);
         } else {
             this.handleTimerReset();
         }
@@ -554,12 +570,25 @@ class GameManager {
         });
         this.addGameLog('Таймер запущен');
         this.emit('timer-started');
+        
+        // Send timer start command to backend
+        this.socketService.emit('timer-control', {
+            gameId: this.gameState.id,
+            action: 'start',
+            time: this.gameState.selectedTime
+        });
     }
 
     handleTimerPause() {
         this.updateGameState({ isTimerRunning: false });
         this.addGameLog('Таймер остановлен');
         this.emit('timer-paused');
+        
+        // Send timer pause command to backend
+        this.socketService.emit('timer-control', {
+            gameId: this.gameState.id,
+            action: 'pause'
+        });
     }
 
     handleTimerReset() {
@@ -569,6 +598,13 @@ class GameManager {
         });
         this.addGameLog('Таймер сброшен');
         this.emit('timer-reset');
+        
+        // Send timer reset command to backend
+        this.socketService.emit('timer-control', {
+            gameId: this.gameState.id,
+            action: 'reset',
+            time: this.gameState.selectedTime
+        });
     }
 
     handleTimerUpdate(data) {
@@ -584,11 +620,24 @@ class GameManager {
                 break;
         }
     }
+    
+    // Update timer time (called from UI when timer ticks)
+    updateTimerTime(currentTime) {
+        this.updateGameState({ currentTime });
+        
+        // Send time update to backend every 5 seconds
+        if (currentTime % 5 === 0) {
+            this.socketService.emit('timer-time-update', {
+                gameId: this.gameState.id,
+                currentTime: currentTime
+            });
+        }
+    }
 
     // Score management
     updateScore(team, score) {
-        if (this.isMultiplayer && this.socket.isConnected) {
-            this.socket.updateScore(team, score);
+        if (this.isMultiplayer && this.socketService.isConnected) {
+            this.socketService.updateScore(team, score);
         } else {
             this.handleScoreUpdate({ team, score });
         }
@@ -616,8 +665,8 @@ class GameManager {
         const gameLog = [...this.gameState.gameLog, logEntry];
         this.updateGameState({ gameLog });
 
-        if (this.isMultiplayer && this.socket.isConnected) {
-            this.socket.addLog(message);
+        if (this.isMultiplayer && this.socketService.isConnected) {
+            this.socketService.addLog(message);
         }
 
         this.emit('log-added', logEntry);

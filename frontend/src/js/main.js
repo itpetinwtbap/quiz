@@ -31,7 +31,7 @@ class QuizApp {
             this.gameManager = new GameManager(this.apiClient, this.socketService);
             
             // Initialize UI
-            this.gameUI = new GameUI(this.gameManager);
+            this.gameUI = new GameUI(this.gameManager, this.socketService);
 
             // Try to connect to socket server
             await this.connectToServer();

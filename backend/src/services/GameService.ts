@@ -75,6 +75,29 @@ export class GameService {
       currentQuestion = questions.find(q => q.id === game.currentQuestionId);
     }
 
+    // Calculate current time if timer is running
+    let currentTimeLeft = game.currentTimeLeft;
+    if (game.isTimerRunning && game.gameState?.timerStartTime) {
+      const startTime = new Date(game.gameState.timerStartTime);
+      const now = new Date();
+      const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+      const initialTime = game.gameState.selectedTime || game.defaultTimeLimit;
+      currentTimeLeft = Math.max(0, initialTime - elapsedSeconds);
+      
+      // If time is up, stop the timer
+      if (currentTimeLeft <= 0) {
+        game.isTimerRunning = false;
+        game.currentTimeLeft = 0;
+        const currentGameState = game.gameState || {};
+        currentGameState.timerStartTime = undefined;
+        game.gameState = {
+          ...currentGameState,
+          lastActivity: new Date().toISOString()
+        };
+        await this.gameRepository.save(game);
+      }
+    }
+
     return {
       id: game.id,
       name: game.name,
@@ -88,7 +111,7 @@ export class GameService {
       currentQuestionId: game.currentQuestionId,
       currentQuestion: currentQuestion,
       isTimerRunning: game.isTimerRunning,
-      currentTimeLeft: game.currentTimeLeft,
+      currentTimeLeft: currentTimeLeft,
       gameLog: game.gameLog || [],
       package: game.package,
       questions: questions,
@@ -212,19 +235,52 @@ export class GameService {
       throw new Error('Game not found');
     }
 
+    const currentGameState = game.gameState || {};
+
     switch (action) {
       case 'start':
         game.isTimerRunning = true;
+        // Set timer start time
+        currentGameState.timerStartTime = new Date().toISOString();
         break;
       case 'pause':
         game.isTimerRunning = false;
+        // Calculate elapsed time and update currentTimeLeft
+        if (currentGameState.timerStartTime) {
+          const startTime = new Date(currentGameState.timerStartTime);
+          const now = new Date();
+          const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+          const initialTime = currentGameState.selectedTime || game.defaultTimeLimit;
+          game.currentTimeLeft = Math.max(0, initialTime - elapsedSeconds);
+        }
+        // Clear timer start time
+        currentGameState.timerStartTime = undefined;
         break;
       case 'reset':
         game.isTimerRunning = false;
         game.currentTimeLeft = time || game.defaultTimeLimit;
+        // Clear timer start time
+        currentGameState.timerStartTime = undefined;
         break;
     }
 
+    // Update game state object
+    game.gameState = {
+      ...currentGameState,
+      lastActivity: new Date().toISOString()
+    };
+
+    await this.gameRepository.save(game);
+  }
+
+  public async updateTimerTime(gameId: string, currentTime: number): Promise<void> {
+    const game = await this.gameRepository.findOne({ where: { id: gameId } });
+    if (!game) {
+      throw new Error('Game not found');
+    }
+
+    game.currentTimeLeft = currentTime;
+    
     // Update game state object
     const currentGameState = game.gameState || {};
     game.gameState = {

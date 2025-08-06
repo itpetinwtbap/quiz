@@ -60,6 +60,7 @@ export class Game {
     selectedTime?: number;
     currentQuestion?: any;
     lastActivity?: string;
+    timerStartTime?: string; // ISO string when timer was started
   };
 
   @ManyToOne(() => QuestionPackage, { nullable: true })
